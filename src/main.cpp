@@ -113,7 +113,7 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
             bytes2Pointer[1] = content[i + 1];
             i += 2;
         }
-        if((bytes2 & shiftingBytes) == 0) {
+        if(0 == (bytes2 & shiftingBytes)) {
             //printf("0x%x 0x%x\n", bytes2, shiftingBytes);
             bytes.push_back(content[i]);
             //std::cout << "Copy " << content[i] << std::endl;
