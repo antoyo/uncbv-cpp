@@ -63,8 +63,6 @@ int main(int argc, char* argv[]) {
 
                 file.read(reinterpret_cast<char*>(bytes2), 0x2);
                 std::cout << "Unknown byte (" << filenames.at(i) << "): " << bytes2[0] << std::endl;
-                uint8_t* bytes2times = reinterpret_cast<uint8_t*>(bytes2);
-                printf("0x%x 0x%x\n", bytes2times[0], bytes2times[1]);
 
                 unsigned char* fileContent = new unsigned char[fileSize];
                 file.read(reinterpret_cast<char*>(fileContent), fileSize);
@@ -74,10 +72,12 @@ int main(int argc, char* argv[]) {
                 std::size_t decompressedSize(0);
                 char* content(nullptr);
                 if(0 == fileContent[0]) {
+                    //The file is not compressed.
                     content = reinterpret_cast<char*>(fileContent + 1);
                     decompressedSize = fileSize - 1;
                 }
                 else {
+                    //The file is compressed.
                     content = decompress(fileContent, fileSize, decompressedSize);
                     delete[] content;
                 }
@@ -104,7 +104,6 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
     unsigned int size(0);
     std::size_t currentPosition(0);
 
-    std::cout << "Unused byte: " << int(content[0]) << std::endl;
     for(int i(1) ; i < fileSize ; i++) {
         shiftingBytes >>= 1;
         if(0 == shiftingBytes) {
@@ -133,6 +132,14 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
                 for(unsigned int j(0) ; j < size ; j++) {
                     bytes.push_back(content[i + 1]);
                 }
+            }
+            else if(1 == high) {
+                //Run-length decoding with bigger size.
+                size = low + (content[i + 1] << 4) + 0x13;
+                for(unsigned int j(0) ; j < size ; j++) {
+                    bytes.push_back(content[i + 2]);
+                }
+                i++;
             }
             else {
                 //Copy content already seen in the file.
