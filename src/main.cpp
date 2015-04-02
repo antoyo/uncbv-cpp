@@ -24,7 +24,7 @@
 #include "Huffman.hpp"
 
 //TODO: fix memory issue.
-//TODO: cleanup the code.
+//FIXME: cannot decompress an archive containing the Mega Database 2014.
 
 bool adjustFilename(std::string& filename);
 char* decompress(unsigned char* content, int size, std::size_t& decompressedSize);
