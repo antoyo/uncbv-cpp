@@ -54,25 +54,11 @@ void Huffman::addNode(uint8_t value, int length, uint16_t bits) {
 }
 
 unsigned char* Huffman::decode() {
-    std::vector<char> bytes;
+    unsigned char* bytes = new unsigned char[65520];
     createTree();
-    auto walkTree = [&bytes, this](uint16_t bits, int length, Node*& node) {
-        for(int i{0} ; i < length ; i++) {
-            if(nullptr == node->left && nullptr == node->right) {
-                bytes.push_back(node->value);
-                node = tree;
-            }
-            if(0 == (bits & MASK)) {
-                node = node->left;
-            }
-            else {
-                node = node->right;
-            }
-            bits <<= 1;
-        }
-    };
     Node* node = tree;
     uint8_t bit{0};
+    std::size_t currentIndex{0};
     for(int end{blockLength * 8} ; position < end ; ) {
         node = tree;
         do {
@@ -84,12 +70,11 @@ unsigned char* Huffman::decode() {
                 node = node->right;
             }
         } while(nullptr != node->left || nullptr != node->right);
-        bytes.push_back(node->value);
+        bytes[currentIndex] = node->value;
+        currentIndex++;
     }
 
-    unsigned char* data = new unsigned char[bytes.size()];
-    std::copy(bytes.begin(), bytes.end(), data);
-    return data;
+    return bytes;
 }
 
 void Huffman::createTree() {

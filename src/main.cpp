@@ -25,6 +25,7 @@
 
 //TODO: fix memory issue.
 //TODO: improve performance.
+//TODO: support archive with subdirectories.
 
 bool adjustFilename(std::string& filename);
 char* decompress(unsigned char* content, int size, std::size_t& decompressedSize);
@@ -61,16 +62,16 @@ bool adjustFilename(std::string& filename) {
 }
 
 char* decompress(unsigned char* content, int fileSize, std::size_t& decompressedSize) {
-    std::vector<char> bytes;
+    char* bytes = new char[65520];
 
-    int shiftingBytes(1);
+    int shiftingBytes{1};
     int16_t bytes2;
     char* bytes2Pointer = reinterpret_cast<char*>(&bytes2);
-    unsigned int high(0);
-    int low(0);
-    int offset(0);
-    unsigned int size(0);
-    std::size_t currentPosition(0);
+    unsigned int high{0};
+    int low{0};
+    int offset{0};
+    unsigned int size{0};
+    std::size_t currentIndex{0};
 
     for(int i{0} ; i < fileSize ; i++) {
         shiftingBytes >>= 1;
@@ -81,7 +82,8 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
             i += 2;
         }
         if(0 == (bytes2 & shiftingBytes)) {
-            bytes.push_back(content[i]);
+            bytes[currentIndex] = content[i];
+            currentIndex++;
         }
         else {
             high = content[i] >> 4;
@@ -90,14 +92,16 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
                 //Run-length decoding.
                 size = low + 3;
                 for(unsigned int j(0) ; j < size ; j++) {
-                    bytes.push_back(content[i + 1]);
+                    bytes[currentIndex] = content[i + 1];
+                    currentIndex++;
                 }
             }
             else if(1 == high) {
                 //Run-length decoding with bigger size.
                 size = low + (content[i + 1] << 4) + 0x13;
                 for(unsigned int j(0) ; j < size ; j++) {
-                    bytes.push_back(content[i + 2]);
+                    bytes[currentIndex] = content[i + 2];
+                    currentIndex++;
                 }
                 i++;
             }
@@ -112,19 +116,18 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
                 else {
                     size = high;
                 }
-                currentPosition = bytes.size();
+                std::size_t currentPosition{currentIndex};
                 for(unsigned int j(0) ; j < size ; j++) {
-                    bytes.push_back(bytes[currentPosition - offset + j]);
+                    bytes[currentIndex] = bytes[currentPosition - offset + j];
+                    currentIndex++;
                 }
             }
             i++;
         }
     }
 
-    char* rawBytes = new char[bytes.size()];
-    std::copy(bytes.begin(), bytes.end(), rawBytes);
-    decompressedSize = bytes.size();
-    return rawBytes;
+    decompressedSize = currentIndex;
+    return bytes;
 }
 
 std::string getFileDirectory(std::string const& filename) {
