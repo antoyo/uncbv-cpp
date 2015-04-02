@@ -21,6 +21,11 @@
 #include <sys/stat.h>
 #include <vector>
 
+#include "Huffman.hpp"
+
+//TODO: fix memory issue.
+//TODO: cleanup the code.
+
 bool adjustFilename(std::string& filename);
 char* decompress(unsigned char* content, int size, std::size_t& decompressedSize);
 std::string getFileDirectory(std::string const& filename);
@@ -67,7 +72,7 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
     unsigned int size(0);
     std::size_t currentPosition(0);
 
-    for(int i(1) ; i < fileSize ; i++) {
+    for(int i{0} ; i < fileSize ; i++) {
         shiftingBytes >>= 1;
         if(0 == shiftingBytes) {
             shiftingBytes = 0x8000;
@@ -97,7 +102,7 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
                 i++;
             }
             else {
-                //Copy content already seen in the file.
+                //Copy content already seen in the file (backward reference).
                 //Get the offset and the length.
                 offset = (content[i + 1] << 4) + low + 3;
                 if(2 == high) {
@@ -147,8 +152,15 @@ void unarchive(std::string const& archiveFilename) {
         unsigned int fileBlock = bytes8[4];
         char bytesFilename[fileBlock];
         std::vector<std::string> filenames;
+        std::vector<int64_t> fileSizes;
         for(unsigned int i(0) ; i < fileCount ; i++) {
             file.read(bytesFilename, fileBlock);
+
+            //Get the total decompressed file size of the current file.
+            int32_t* fileSizePointer(reinterpret_cast<int32_t*>(bytesFilename + 136));
+            
+            fileSizes.push_back(*fileSizePointer);
+
             //The filename is encoded in ISO-8859-1. A conversion to UTF-8 is needed.
             char filename[fileBlock];
             iconv_t converter = iconv_open("UTF-8", "ISO-8859-1");
@@ -166,40 +178,58 @@ void unarchive(std::string const& archiveFilename) {
         }
 
         for(unsigned int i(0) ; i < fileCount ; i++) {
-            uint16_t bytes2[1];
-            file.read(reinterpret_cast<char*>(bytes2), 0x2);
-            unsigned int fileSize = bytes2[0];
-
-            file.read(reinterpret_cast<char*>(bytes2), 0x2);
-            std::cout << "Unknown byte (" << filenames.at(i) << "): " << bytes2[0] << std::endl;
-
-            unsigned char* fileContent = new unsigned char[fileSize];
-            file.read(reinterpret_cast<char*>(fileContent), fileSize);
-
+            std::size_t totalFileSize(fileSizes.at(i));
             std::ofstream outputFile(filenames.at(i));
-            std::size_t decompressedSize(0);
-            char* content(nullptr);
-            if(0 != (fileContent[0] & 2)) {
-                std::cout << "What to do?" << std::endl;
-                continue;
-            }
-            if(0 == fileContent[0]) {
-                //The file is not compressed.
-                content = reinterpret_cast<char*>(fileContent + 1);
-                decompressedSize = fileSize - 1;
-            }
-            else if(1 == fileContent[0]) {
-                //The file is compressed.
-                content = decompress(fileContent, fileSize, decompressedSize);
-                delete[] content;
-            }
-            else {
-                std::cout << "Error: " << int(fileContent[0]) << std::endl;
-            }
-            outputFile.write(content, decompressedSize);
-            outputFile.close();
+            for(std::size_t currentPosition(0) ; currentPosition < totalFileSize ; ) {
+                uint16_t bytes2{0};
+                file.read(reinterpret_cast<char*>(&bytes2), 0x2);
+                unsigned int fileSize = bytes2;
 
-            delete[] fileContent;
+                file.read(reinterpret_cast<char*>(&bytes2), 0x2); //TODO: unknown bytes.
+
+                unsigned char* fileContent = new unsigned char[fileSize];
+                file.read(reinterpret_cast<char*>(fileContent), fileSize);
+
+                std::size_t decompressedSize(0);
+                char* content(nullptr);
+                unsigned char flags = fileContent[0];
+                int delta{1};
+                bool huffmanEncoded{0 != (flags & 2)};
+                if(huffmanEncoded) {
+                    delta = 0;
+                    uint8_t byte{fileContent[1]};
+                    uint16_t blockDecompressedSize = byte << 8;
+                    byte = fileContent[2];
+                    blockDecompressedSize += byte;
+                    Huffman huffman(fileContent + 3, blockDecompressedSize);
+                    unsigned char* decodedContent = huffman.decode();
+                    delete[] fileContent;
+                    fileContent = decodedContent;
+                    fileSize = blockDecompressedSize;
+                }
+                if(0 != (flags & 1)) {
+                    //The file is compressed.
+                    content = decompress(fileContent + delta, fileSize - delta, decompressedSize);
+                    outputFile.write(content, decompressedSize);
+                    delete[] content;
+                }
+                else {
+                    //The file is not compressed.
+                    if(huffmanEncoded) {
+                        content = reinterpret_cast<char*>(fileContent);
+                        decompressedSize = fileSize;
+                    }
+                    else {
+                        content = reinterpret_cast<char*>(fileContent + 1);
+                        decompressedSize = fileSize - 1;
+                    }
+                    outputFile.write(content, decompressedSize);
+                }
+
+                delete[] fileContent;
+                currentPosition += decompressedSize;
+            }
+            outputFile.close();
         }
     }
     file.close();
