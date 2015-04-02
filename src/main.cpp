@@ -25,7 +25,6 @@
 
 //TODO: fix memory issue.
 //TODO: improve performance.
-//TODO: support archive with subdirectories.
 
 bool adjustFilename(std::string& filename);
 char* decompress(unsigned char* content, int size, std::size_t& decompressedSize);
@@ -139,8 +138,12 @@ std::string getFileDirectory(std::string const& filename) {
 }
 
 void mkdirTree(std::string const& directory) {
-    //TODO: create the subdirectories if needed.
-    mkdir(directory.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    int index{-1};
+    do {
+        index++;
+        index = directory.find('/', index);
+        mkdir(directory.substr(0, index).c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    } while(index != std::string::npos);
 }
 
 void unarchive(std::string const& archiveFilename) {

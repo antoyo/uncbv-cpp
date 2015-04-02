@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cassert>
 #include <vector>
 
 #include "Huffman.hpp"
@@ -69,7 +70,7 @@ unsigned char* Huffman::decode() {
             else {
                 node = node->right;
             }
-        } while(nullptr != node->left || nullptr != node->right);
+        } while(nullptr != node->left or nullptr != node->right);
         bytes[currentIndex] = node->value;
         currentIndex++;
     }
@@ -95,6 +96,8 @@ void Huffman::createTree() {
 }
 
 uint16_t Huffman::getBits(int count) {
+    assert(count >= 0 and count <= 16);
+    
     //TODO: improve this to get more than one bit at once.
     //TODO: there is an invalid read of size 1 to fix.
     uint16_t bits{0};
