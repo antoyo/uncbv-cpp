@@ -2,5 +2,6 @@
 build
 tests
 *.cbv
+*.cbz
 *.ini
 *.pgn

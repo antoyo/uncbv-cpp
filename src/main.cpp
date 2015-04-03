@@ -18,16 +18,20 @@
 #include <fstream>
 #include <iconv.h>
 #include <iostream>
+#include <mcrypt.h>
 #include <sys/stat.h>
 #include <vector>
 
 #include "Huffman.hpp"
 
+//TODO: find a better way to check if the password of encrypted archive is wrong.
 //TODO: fix memory issue.
 //TODO: improve performance.
 
 bool adjustFilename(std::string& filename);
+std::string createKey(std::string const& password);
 char* decompress(unsigned char* content, int size, std::size_t& decompressedSize);
+std::string decrypt(std::string const& archiveFilename, std::string const& password);
 std::string getFileDirectory(std::string const& filename);
 void mkdirTree(std::string const& directory);
 void unarchive(std::string const& archiveFilename);
@@ -58,6 +62,15 @@ bool adjustFilename(std::string& filename) {
         }
     } while(haveBackslash);
     return createDirectory;
+}
+
+std::string createKey(std::string const& password) {
+    std::string key(password);
+    while(key.size() < 8) {
+        key.append(key);
+    }
+    key = key.substr(0, 8);
+    return key;
 }
 
 char* decompress(unsigned char* content, int fileSize, std::size_t& decompressedSize) {
@@ -129,6 +142,56 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
     return bytes;
 }
 
+std::string decrypt(std::string const& archiveFilename, std::string const& password) {
+    std::string key{createKey(password)};
+    char algorithm[]{"des"};
+    char mode[]{"ecb"};
+    MCRYPT td = mcrypt_module_open(algorithm, nullptr, mode, nullptr);
+    if(MCRYPT_FAILED == td) {
+        std::cerr << "Cannot open DES mcrypt module." << std::endl;
+        return "";
+    }
+    char rawKey[8];
+    std::copy(key.begin(), key.end(), rawKey);
+    int result = mcrypt_generic_init(td, rawKey, 8, nullptr);
+    if(result < 0) {
+        mcrypt_perror(result);
+        return "";
+    }
+
+    std::string decryptedFilename{archiveFilename};
+    decryptedFilename.back() = 'v';
+
+    std::ifstream inputFile{archiveFilename};
+    std::ofstream outputFile{decryptedFilename};
+
+    int const MAX_LENGTH{4096};
+    char buffer[MAX_LENGTH];
+
+    inputFile.read(buffer, MAX_LENGTH);
+    std::streamsize length{inputFile.gcount()};
+    mdecrypt_generic(td, buffer, length);
+    if(8 == buffer[0]) {
+        outputFile.write(buffer, length);
+    }
+    else {
+        std::cerr << "Wrong password." << std::endl;
+        return "";
+    }
+
+    while(not inputFile.eof()) {
+        inputFile.read(buffer, MAX_LENGTH);
+        length = inputFile.gcount();
+        mdecrypt_generic(td, buffer, length);
+        outputFile.write(buffer, length);
+    }
+
+    mcrypt_generic_end(td);
+    inputFile.close();
+    outputFile.close();
+    return decryptedFilename;
+}
+
 std::string getFileDirectory(std::string const& filename) {
     std::size_t index(filename.rfind('/'));
     if(filename.npos != index) {
@@ -147,7 +210,17 @@ void mkdirTree(std::string const& directory) {
 }
 
 void unarchive(std::string const& archiveFilename) {
-    std::ifstream file(archiveFilename, std::ios_base::in | std::ios_base::binary);
+    std::string decryptedFilename;
+    if(archiveFilename.substr(archiveFilename.rfind(".") + 1) == "cbz") {
+        std::cout << "Password:" << std::endl;
+        std::string password;
+        std::cin >> password;
+        decryptedFilename = decrypt(archiveFilename, password);
+    }
+    else {
+        decryptedFilename = archiveFilename;
+    }
+    std::ifstream file(decryptedFilename, std::ios_base::in | std::ios_base::binary);
     if(not file) {
         std::cout << "Failed to read file." << std::endl;
     }
