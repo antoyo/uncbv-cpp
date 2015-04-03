@@ -30,7 +30,7 @@
 //TODO: improve performance.
 
 bool adjustFilename(std::string& filename);
-std::string createKey(std::string const& password);
+void createKey(std::string const& password, unsigned char* key);
 char* decompress(unsigned char* content, int size, std::size_t& decompressedSize);
 std::string decrypt(std::string const& archiveFilename, std::string const& password);
 std::string getFileDirectory(std::string const& filename);
@@ -65,13 +65,26 @@ bool adjustFilename(std::string& filename) {
     return createDirectory;
 }
 
-std::string createKey(std::string const& password) {
-    std::string key(password);
-    while(key.size() < 8) {
-        key.append(key);
+void createKey(std::string const& password, unsigned char* key) {
+    if(password.size() < 8) {
+        int inputIndex{0};
+        int outputIndex{0};
+        while(outputIndex < 8) {
+            key[outputIndex] = password[inputIndex];
+            inputIndex = (inputIndex + 1) % password.size();
+            outputIndex++;
+        }
     }
-    key = key.substr(0, 8);
-    return key;
+    else if(password.size() > 8) {
+        for(std::size_t i{0} ; i < password.size() ; i++) {
+            std::size_t index{i % 8};
+            key[index] *= 2;
+            key[index] ^= password[i];
+        }
+    }
+    else {
+        std::copy(password.begin(), password.end(), key);
+    }
 }
 
 char* decompress(unsigned char* content, int fileSize, std::size_t& decompressedSize) {
@@ -144,7 +157,9 @@ char* decompress(unsigned char* content, int fileSize, std::size_t& decompressed
 }
 
 std::string decrypt(std::string const& archiveFilename, std::string const& password) {
-    std::string key{createKey(password)};
+    unsigned char key[8] = {0};
+    createKey(password, key);
+
     char algorithm[]{"des"};
     char mode[]{"ecb"};
     MCRYPT td = mcrypt_module_open(algorithm, nullptr, mode, nullptr);
@@ -152,9 +167,7 @@ std::string decrypt(std::string const& archiveFilename, std::string const& passw
         std::cerr << "Cannot open DES mcrypt module." << std::endl;
         return "";
     }
-    char rawKey[8];
-    std::copy(key.begin(), key.end(), rawKey);
-    int result = mcrypt_generic_init(td, rawKey, 8, nullptr);
+    int result = mcrypt_generic_init(td, key, 8, nullptr);
     if(result < 0) {
         mcrypt_perror(result);
         return "";
