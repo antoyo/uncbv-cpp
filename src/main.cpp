@@ -24,7 +24,6 @@
 
 #include "Huffman.hpp"
 
-//FIXME: does not work when the password is more than 8 characters.
 //TODO: find a better way to check if the password of encrypted archive is wrong.
 //TODO: fix memory issue.
 //TODO: improve performance.
