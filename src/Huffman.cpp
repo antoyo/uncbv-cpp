@@ -55,7 +55,7 @@ void Huffman::addNode(uint8_t value, int length, uint16_t bits) {
 }
 
 unsigned char* Huffman::decode() {
-    unsigned char* bytes = new unsigned char[65520];
+    unsigned char* bytes = new unsigned char[1000000];
     createTree();
     Node* node = tree;
     uint8_t bit{0};
