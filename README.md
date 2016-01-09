@@ -10,7 +10,7 @@ cmake ..
 make
 ```
 
-This produce the executable `uncbv` in the `build` folder.
+This produces the executable `uncbv` in the `build` folder.
 
 ## Usage
 
